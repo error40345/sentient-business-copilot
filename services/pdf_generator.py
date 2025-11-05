@@ -1,0 +1,462 @@
+import os
+from typing import Dict, Any, List
+from datetime import datetime
+import io
+
+try:
+    from reportlab.lib.pagesizes import letter, A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.platypus import PageBreak
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
+
+class PDFGenerator:
+    """
+    PDF generation service for business plans and reports
+    Uses ReportLab for professional PDF creation
+    """
+    
+    def __init__(self):
+        self.styles = None
+        if REPORTLAB_AVAILABLE:
+            self.styles = getSampleStyleSheet()
+            self._setup_custom_styles()
+    
+    def _setup_custom_styles(self):
+        """Setup custom paragraph styles"""
+        
+        if not self.styles:
+            return
+        
+        # Custom title style
+        self.styles.add(ParagraphStyle(
+            name='CustomTitle',
+            parent=self.styles['Heading1'],
+            fontSize=24,
+            spaceAfter=30,
+            textColor=colors.HexColor('#2E86AB'),
+            alignment=1  # Center alignment
+        ))
+        
+        # Custom section header style
+        self.styles.add(ParagraphStyle(
+            name='SectionHeader',
+            parent=self.styles['Heading2'],
+            fontSize=16,
+            spaceBefore=20,
+            spaceAfter=12,
+            textColor=colors.HexColor('#A23B72'),
+            borderWidth=1,
+            borderColor=colors.HexColor('#A23B72'),
+            borderPadding=5
+        ))
+        
+        # Custom body text style
+        self.styles.add(ParagraphStyle(
+            name='CustomBody',
+            parent=self.styles['Normal'],
+            fontSize=11,
+            spaceAfter=12,
+            leading=14
+        ))
+    
+    def generate_business_plan_pdf(self, business_plan: Dict[str, Any], chat_history: List[Dict] = None) -> bytes:
+        """Generate comprehensive business plan PDF"""
+        
+        if not REPORTLAB_AVAILABLE:
+            return self._generate_fallback_pdf(business_plan, chat_history)
+        
+        try:
+            # Create PDF buffer
+            buffer = io.BytesIO()
+            
+            # Create document
+            doc = SimpleDocTemplate(
+                buffer,
+                pagesize=letter,
+                rightMargin=72,
+                leftMargin=72,
+                topMargin=72,
+                bottomMargin=18
+            )
+            
+            # Build content
+            story = []
+            
+            # Title page
+            self._add_title_page(story, business_plan)
+            
+            # Executive summary
+            self._add_executive_summary(story, business_plan)
+            
+            # Business overview
+            self._add_business_overview(story, business_plan)
+            
+            # Market analysis
+            self._add_market_analysis(story, business_plan)
+            
+            # Business plan details from chat
+            if chat_history:
+                self._add_chat_insights(story, chat_history)
+            
+            # Financial projections
+            self._add_financial_projections(story, business_plan)
+            
+            # Launch plan
+            self._add_launch_plan(story, business_plan)
+            
+            # Appendices
+            self._add_appendices(story, business_plan)
+            
+            # Build PDF
+            doc.build(story)
+            
+            # Get PDF bytes
+            buffer.seek(0)
+            return buffer.getvalue()
+            
+        except Exception as e:
+            # Fallback to simple text-based PDF
+            return self._generate_fallback_pdf(business_plan, chat_history)
+    
+    def _add_title_page(self, story: List, business_plan: Dict):
+        """Add title page to PDF"""
+        
+        business_name = business_plan.get("business_name", "Business Plan")
+        
+        # Title
+        title = Paragraph(f"{business_name}", self.styles['CustomTitle'])
+        story.append(title)
+        story.append(Spacer(1, 0.5*inch))
+        
+        # Subtitle
+        subtitle = Paragraph("Comprehensive Business Plan", self.styles['Heading2'])
+        story.append(subtitle)
+        story.append(Spacer(1, 0.3*inch))
+        
+        # Date and location
+        location = business_plan.get("location", "")
+        date = datetime.now().strftime("%B %Y")
+        
+        info_text = f"Prepared: {date}"
+        if location:
+            info_text += f" | Location: {location}"
+        
+        info = Paragraph(info_text, self.styles['Normal'])
+        story.append(info)
+        story.append(Spacer(1, 0.5*inch))
+        
+        # Generated by note
+        generated_by = Paragraph(
+            "<i>Generated by Sentient Business Copilot</i>", 
+            self.styles['Normal']
+        )
+        story.append(generated_by)
+        
+        story.append(PageBreak())
+    
+    def _add_executive_summary(self, story: List, business_plan: Dict):
+        """Add executive summary section"""
+        
+        story.append(Paragraph("Executive Summary", self.styles['SectionHeader']))
+        
+        summary_content = []
+        
+        # Business overview
+        business_name = business_plan.get("business_name", "This business")
+        industry = business_plan.get("industry", "")
+        location = business_plan.get("location", "")
+        
+        overview = f"{business_name}"
+        if industry:
+            overview += f" operates in the {industry} industry"
+        if location:
+            overview += f" in {location}"
+        overview += "."
+        
+        summary_content.append(overview)
+        
+        # Financial highlights
+        if business_plan.get("estimated_startup_cost"):
+            cost = business_plan["estimated_startup_cost"]
+            summary_content.append(f"Total startup investment required: ${cost:,}")
+        
+        if business_plan.get("break_even_timeline"):
+            timeline = business_plan["break_even_timeline"]
+            summary_content.append(f"Projected break-even: {timeline}")
+        
+        # Market opportunity
+        if business_plan.get("market_data", {}).get("market_opportunity"):
+            opportunity = business_plan["market_data"]["market_opportunity"]
+            summary_content.append(f"Market opportunity: {opportunity[:200]}...")
+        
+        # Add content to story
+        for content in summary_content:
+            story.append(Paragraph(content, self.styles['CustomBody']))
+            story.append(Spacer(1, 0.1*inch))
+        
+        story.append(Spacer(1, 0.3*inch))
+    
+    def _add_business_overview(self, story: List, business_plan: Dict):
+        """Add business overview section"""
+        
+        story.append(Paragraph("Business Overview", self.styles['SectionHeader']))
+        
+        # Basic information table
+        basic_info = []
+        
+        if business_plan.get("business_name"):
+            basic_info.append(["Business Name", business_plan["business_name"]])
+        
+        if business_plan.get("industry"):
+            basic_info.append(["Industry", business_plan["industry"]])
+        
+        if business_plan.get("location"):
+            basic_info.append(["Location", business_plan["location"]])
+        
+        if business_plan.get("target_market"):
+            basic_info.append(["Target Market", business_plan["target_market"]])
+        
+        if basic_info:
+            table = Table(basic_info, colWidths=[2*inch, 4*inch])
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F5F5F5')),
+                ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            story.append(table)
+            story.append(Spacer(1, 0.2*inch))
+        
+        # Business model description
+        if business_plan.get("business_model"):
+            story.append(Paragraph("Business Model", self.styles['Heading3']))
+            model_text = business_plan["business_model"][:1000] + "..."
+            story.append(Paragraph(model_text, self.styles['CustomBody']))
+            story.append(Spacer(1, 0.2*inch))
+        
+        story.append(Spacer(1, 0.3*inch))
+    
+    def _add_market_analysis(self, story: List, business_plan: Dict):
+        """Add market analysis section"""
+        
+        story.append(Paragraph("Market Analysis", self.styles['SectionHeader']))
+        
+        market_data = business_plan.get("market_data", {})
+        
+        if market_data:
+            # Competition level
+            if market_data.get("competition_level"):
+                story.append(Paragraph("Competition Analysis", self.styles['Heading3']))
+                comp_text = f"Competition Level: {market_data['competition_level']}"
+                story.append(Paragraph(comp_text, self.styles['CustomBody']))
+                story.append(Spacer(1, 0.1*inch))
+            
+            # Key insights
+            if market_data.get("key_insights"):
+                story.append(Paragraph("Market Insights", self.styles['Heading3']))
+                for insight in market_data["key_insights"][:5]:
+                    story.append(Paragraph(f"• {insight}", self.styles['CustomBody']))
+                story.append(Spacer(1, 0.2*inch))
+        else:
+            story.append(Paragraph(
+                "Market research data will be added as it becomes available.",
+                self.styles['CustomBody']
+            ))
+        
+        story.append(Spacer(1, 0.3*inch))
+    
+    def _add_chat_insights(self, story: List, chat_history: List[Dict]):
+        """Add detailed insights from chat conversation"""
+        
+        story.append(Paragraph("Business Plan Details", self.styles['SectionHeader']))
+        
+        # Filter assistant messages that contain meaningful content
+        assistant_messages = [msg for msg in chat_history if msg.get('role') == 'assistant']
+        
+        if not assistant_messages:
+            story.append(Paragraph("No detailed analysis available yet.", self.styles['CustomBody']))
+            story.append(Spacer(1, 0.3*inch))
+            return
+        
+        # Add each assistant response as a section
+        for i, msg in enumerate(assistant_messages, 1):
+            content = msg.get('content', '')
+            if not content or len(content) < 50:
+                continue
+            
+            # Clean up markdown formatting for PDF
+            content = content.replace('**', '')
+            content = content.replace('*', '')
+            content = content.replace('###', '')
+            content = content.replace('##', '')
+            content = content.replace('#', '')
+            
+            # Split into paragraphs
+            paragraphs = content.split('\n\n')
+            
+            for para in paragraphs:
+                para = para.strip()
+                if para and len(para) > 10:
+                    try:
+                        # Add paragraph to story
+                        p = Paragraph(para, self.styles['CustomBody'])
+                        story.append(p)
+                        story.append(Spacer(1, 0.15*inch))
+                    except:
+                        # Skip problematic paragraphs
+                        continue
+        
+        story.append(Spacer(1, 0.3*inch))
+    
+    def _add_financial_projections(self, story: List, business_plan: Dict):
+        """Add financial projections section"""
+        
+        story.append(Paragraph("Financial Projections", self.styles['SectionHeader']))
+        
+        # Financial summary table
+        financial_data = []
+        
+        if business_plan.get("estimated_startup_cost"):
+            cost = business_plan["estimated_startup_cost"]
+            financial_data.append(["Startup Investment", f"${cost:,}"])
+        
+        if business_plan.get("estimated_monthly_expenses"):
+            expenses = business_plan["estimated_monthly_expenses"]
+            financial_data.append(["Monthly Expenses", f"${expenses:,}"])
+        
+        if business_plan.get("break_even_timeline"):
+            timeline = business_plan["break_even_timeline"]
+            financial_data.append(["Break-even Timeline", timeline])
+        
+        if financial_data:
+            table = Table(financial_data, colWidths=[3*inch, 3*inch])
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E86AB')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 11),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            story.append(table)
+            story.append(Spacer(1, 0.2*inch))
+        
+        # Cost breakdown
+        if business_plan.get("cost_breakdown"):
+            story.append(Paragraph("Cost Breakdown", self.styles['Heading3']))
+            breakdown = business_plan["cost_breakdown"]
+            
+            for section, items in breakdown.items():
+                if items:
+                    story.append(Paragraph(f"<b>{section}</b>", self.styles['Normal']))
+                    for item in items[:3]:  # Show top 3 items per section
+                        story.append(Paragraph(f"• {item}", self.styles['CustomBody']))
+                    story.append(Spacer(1, 0.1*inch))
+        
+        story.append(Spacer(1, 0.3*inch))
+    
+    def _add_launch_plan(self, story: List, business_plan: Dict):
+        """Add launch plan section"""
+        
+        story.append(Paragraph("Launch Plan", self.styles['SectionHeader']))
+        
+        # Launch timeline
+        if business_plan.get("launch_timeline"):
+            story.append(Paragraph("Launch Timeline", self.styles['Heading3']))
+            timeline = business_plan["launch_timeline"]
+            
+            for phase, tasks in timeline.items():
+                story.append(Paragraph(f"<b>{phase}</b>", self.styles['Normal']))
+                for task in tasks[:5]:  # Show top 5 tasks per phase
+                    story.append(Paragraph(f"• {task}", self.styles['CustomBody']))
+                story.append(Spacer(1, 0.1*inch))
+        
+        # Next steps
+        if business_plan.get("next_steps"):
+            story.append(Paragraph("Immediate Next Steps", self.styles['Heading3']))
+            for i, step in enumerate(business_plan["next_steps"][:5], 1):
+                story.append(Paragraph(f"{i}. {step}", self.styles['CustomBody']))
+        
+        story.append(Spacer(1, 0.3*inch))
+    
+    def _add_appendices(self, story: List, business_plan: Dict):
+        """Add appendices section"""
+        
+        story.append(PageBreak())
+        story.append(Paragraph("Appendices", self.styles['SectionHeader']))
+        
+        # Generation metadata
+        story.append(Paragraph("Document Information", self.styles['Heading3']))
+        
+        metadata = [
+            ["Generated Date", datetime.now().strftime("%Y-%m-%d %H:%M")],
+            ["Generator", "Sentient Business Copilot"],
+            ["AI Models Used", "ROMA, OpenDeepSearch, Dobby-70B"],
+            ["Document Version", "1.0"]
+        ]
+        
+        table = Table(metadata, colWidths=[2*inch, 4*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F0F0F0')),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 1, colors.gray)
+        ]))
+        
+        story.append(table)
+        story.append(Spacer(1, 0.2*inch))
+        
+        # Disclaimer
+        disclaimer = """
+        <b>Disclaimer:</b> This business plan was generated using AI-powered tools and should be reviewed 
+        by qualified business professionals. Financial projections are estimates based on available data 
+        and market research. Actual results may vary significantly. Consult with legal, financial, and 
+        business advisors before making any business decisions.
+        """
+        
+        story.append(Paragraph(disclaimer, self.styles['Normal']))
+    
+    def _generate_fallback_pdf(self, business_plan: Dict[str, Any], chat_history: List[Dict] = None) -> bytes:
+        """Generate simple text-based PDF when ReportLab is not available"""
+        
+        # Create simple text content
+        content = f"""
+BUSINESS PLAN
+{business_plan.get('business_name', 'New Business')}
+Generated: {datetime.now().strftime('%Y-%m-%d')}
+
+EXECUTIVE SUMMARY
+Business: {business_plan.get('business_name', 'N/A')}
+Industry: {business_plan.get('industry', 'N/A')}
+Location: {business_plan.get('location', 'N/A')}
+
+FINANCIAL SUMMARY
+Startup Cost: ${business_plan.get('estimated_startup_cost', 0):,}
+Monthly Expenses: ${business_plan.get('estimated_monthly_expenses', 0):,}
+Break-even: {business_plan.get('break_even_timeline', 'TBD')}
+
+"""
+        
+        # Add chat insights if available
+        if chat_history:
+            content += "\nDETAILED ANALYSIS\n" + "="*50 + "\n\n"
+            assistant_messages = [msg for msg in chat_history if msg.get('role') == 'assistant']
+            for msg in assistant_messages:
+                msg_content = msg.get('content', '')
+                if msg_content:
+                    content += msg_content + "\n\n" + "-"*50 + "\n\n"
+        
+        content += "\nGenerated by AI Business Planning Assistant\n"
+        
+        return content.encode('utf-8')

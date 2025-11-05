@@ -1,0 +1,118 @@
+# Business Copilot Agent Profile
+# Specialized configuration for business planning, market research, and launch guidance
+# Uses ROMA framework with custom business-specific tools
+
+# Default agent configurations
+agents:
+  # Atomizer: Fast decision-making
+  atomizer:
+    llm:
+      model: ${oc.env:LLM_MODEL,fireworks_ai/accounts/fireworks/models/llama-v3p3-70b-instruct}
+      temperature: 0.4
+      max_tokens: 4000
+      api_key: ${oc.env:FIREWORKS_API_KEY}
+
+  # Planner: Strategic business planning
+  planner:
+    llm:
+      model: ${oc.env:LLM_MODEL,fireworks_ai/accounts/fireworks/models/llama-v3p3-70b-instruct}
+      temperature: 0.4
+      max_tokens: 4500
+      api_key: ${oc.env:FIREWORKS_API_KEY}
+    agent_config:
+      max_subtasks: 10
+
+  # Default Executor for business tasks
+  executor:
+    llm:
+      model: ${oc.env:LLM_MODEL,fireworks_ai/accounts/fireworks/models/llama-v3p3-70b-instruct}
+      temperature: 0.4
+      max_tokens: 4500
+      api_key: ${oc.env:FIREWORKS_API_KEY}
+    prediction_strategy: cot
+    agent_config:
+      max_executions: 8
+
+    # Business-specific toolkits
+    toolkits:
+      - class_name: CalculatorToolkit
+        enabled: true
+      - class_name: SerperToolkit
+        enabled: true
+        config:
+          api_key: ${oc.env:SERPER_API_KEY}
+          max_results: 10
+
+  # Aggregator: Synthesis of business insights
+  aggregator:
+    llm:
+      model: ${oc.env:LLM_MODEL,fireworks_ai/accounts/fireworks/models/llama-v3p3-70b-instruct}
+      temperature: 0.4
+      max_tokens: 4500
+      api_key: ${oc.env:FIREWORKS_API_KEY}
+
+  # Verifier: Validation of business plans
+  verifier:
+    llm:
+      model: ${oc.env:LLM_MODEL,fireworks_ai/accounts/fireworks/models/llama-v3p3-70b-instruct}
+      temperature: 0.4
+      max_tokens: 4000
+      api_key: ${oc.env:FIREWORKS_API_KEY}
+
+# Note: ROMA uses default executor for all tasks
+# Task-aware routing with custom types (RESEARCH, PLANNING, FINANCIAL, LAUNCH)
+# is not supported in this version of ROMA
+
+# Runtime configuration
+runtime:
+  max_depth: 2
+  verbose: true
+  enable_logging: true
+  log_level: INFO
+  timeout: 240
+
+# Resilience - Optimized for rate limit handling
+resilience:
+  retry:
+    enabled: true
+    max_attempts: 5
+    strategy: exponential_backoff
+    base_delay: 5.0
+    max_delay: 60.0
+
+  circuit_breaker:
+    enabled: false
+
+  checkpoint:
+    enabled: false
+
+# Storage - PostgreSQL disabled (using file storage instead)
+storage:
+  base_path: ${oc.env:STORAGE_BASE_PATH,./data}
+  max_file_size: 10485760  # 10MB
+
+  postgres:
+    enabled: false
+    connection_url: ${oc.env:DATABASE_URL}
+    pool_size: 5
+    max_overflow: 10
+    pool_timeout: 30.0
+    echo_sql: false
+
+# Observability - Disabled for simplicity
+observability:
+  mlflow:
+    enabled: false
+
+# Logging
+logging:
+  level: ${oc.env:LOG_LEVEL,INFO}
+  log_dir: ${oc.env:LOG_DIR,logs}
+  console_format: detailed
+  file_format: default
+  serialize: false
+  rotation: 100 MB
+  retention: 7 days
+  colorize: true
+  backtrace: false
+  diagnose: false
